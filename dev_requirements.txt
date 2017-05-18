@@ -1,0 +1,8 @@
+aiohttp
+nose
+mock
+pandas
+Sphinx==1.5.5
+sphinx_rtd_theme
+wheel
+twine
