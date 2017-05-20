@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import aiohttp
 
 from .httptool import ClientSession
+from .line_protocol import *
 
 
 class AioInfluxDBClient(object):
@@ -150,6 +151,17 @@ class AioInfluxDBClient(object):
 
     async def request(self, url, method="GET", params=None, data=None, expected_response_code=200, headers=None,
                       request_client=None):
+        """
+        
+        :param url: 
+        :param method: 
+        :param params: 
+        :param data: 
+        :param expected_response_code: 
+        :param headers: 
+        :param request_client: 
+        :return: 
+        """
         url = "{}/{}".format(self._baseurl, url)
         if request_client is None:
             request_client = self._session
@@ -179,6 +191,35 @@ class AioInfluxDBClient(object):
             return _response
         else:
             raise Exception
+
+    async def write(self, data, params=None, expected_response_code=204, protocol='json'):
+        """
+        
+        :param data: 
+        :param params: 
+        :param expected_response_code: 
+        :param protocol: 
+        :return: 
+        """
+        headers = self._headers
+        headers['content-type'] = 'application/octet-stream'
+        if params:
+            precision = params.get('precision')
+        else:
+            precision = None
+        if protocol == 'json':
+            data = make_lines(data, precision).encode('utf-8')
+        elif protocol == 'line':
+            data = ('\n'.join(data) + '\n').encode('utf-8')
+        await self.request(
+            url="write",
+            method='POST',
+            params=params,
+            data=data,
+            expected_response_code=expected_response_code,
+            headers=headers
+        )
+        return True 
 
 
 def parse_dsn(dsn):
