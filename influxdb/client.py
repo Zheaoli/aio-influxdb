@@ -12,8 +12,11 @@ from urllib.parse import urlparse
 
 import aiohttp
 
-from .httptool import ClientSession
-from .line_protocol import *
+
+from influxdb.httptool import ClientSession
+from influxdb.line_protocol import *
+from influxdb.httptool import ClientSession
+from influxdb.resultset import ResultSet
 
 
 class AioInfluxDBClient(object):
@@ -86,6 +89,10 @@ class AioInfluxDBClient(object):
 
     def _get_port(self):
         return self.__port
+
+    @property
+    def session(self):
+        return self._session
 
     @classmethod
     def from_DSN(cls, dsn, **kwargs):
@@ -175,8 +182,8 @@ class AioInfluxDBClient(object):
         _try = 0
         while retry:
             try:
-                _response = self._session.request(method=method, url=url, params=params, data=data, headers=headers,
-                                                  auth=self._base_auth)
+                _response = request_client.request(method=method, url=url, params=params, data=data, headers=headers,
+                                                   auth=self._base_auth)
                 break
             except aiohttp.client_exceptions.ClientConnectionError as e:
                 _try += 1
@@ -194,7 +201,6 @@ class AioInfluxDBClient(object):
 
     async def write(self, data, params=None, expected_response_code=204, protocol='json'):
         """
-        
         :param data: 
         :param params: 
         :param expected_response_code: 
@@ -219,7 +225,91 @@ class AioInfluxDBClient(object):
             expected_response_code=expected_response_code,
             headers=headers
         )
-        return True 
+        return True
+
+
+    async def _read_chunked_response(self, response, raise_error=True):
+        result_set = {}
+        async for line in self._iter_lines(response):
+            if isinstance(line, bytes):
+                line = line.decode("utf-8")
+            data = json.loads(line)
+            for result in data.get("results", []):
+                for _key in result:
+                    if isinstance(result[_key], list):
+                        result_set.setdefault(_key, []).extend(result[_key])
+        return ResultSet(result_set, raise_errors=raise_error)
+
+    async def _iter_lines(self, response, chunk_size=512, decode_unicode=None, delimiter=None):
+        pending = None
+        async for chunk in response.content.iter_chunked(chunk_size):
+            if pending is not None:
+                chunk = pending + chunk
+            if delimiter:
+                lines = chunk.split(delimiter)
+            else:
+                lines = chunk.splitlines()
+            if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]:
+                pending = lines.pop()
+            else:
+                pending = None
+            for line in lines:
+                yield line
+
+        if pending is not None:
+            yield pending
+
+    async def query(self,
+                    query,
+                    params=None,
+                    epoch=None,
+                    expected_response_code=200,
+                    database=None,
+                    raise_errors=True,
+                    chunked=False,
+                    chunk_size=0):
+        """
+
+        :param query: 
+        :param params: 
+        :param epoch: 
+        :param expected_response_code: 
+        :param database: 
+        :param raise_errors: 
+        :param chunked: 
+        :param chunk_size: 
+        :return: 
+        """
+        if params is None:
+            params = {}
+
+        params['q'] = query
+        params['db'] = database or self._database
+        if epoch is not None:
+            params['epoch'] = epoch
+        if chunked:
+            params['chunked'] = 'true'
+            if chunk_size > 0:
+                params['chunk_size'] = chunk_size
+        response = self.request(
+            url='query',
+            method='GET',
+            params=params,
+            data=None,
+            expected_response_code=expected_response_code
+        )
+        if chunked:
+            return self._read_chunked_response(response)
+        data = await response.json()
+        results = [
+            ResultSet(result, raise_errors=raise_errors)
+            for result
+            in data.get("results", [])
+        ]
+        if len(results) == 1:
+            return results[0]
+        else:
+            return results
 
 
 def parse_dsn(dsn):
