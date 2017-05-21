@@ -225,7 +225,6 @@ class AioInfluxDBClient(object):
         )
         return True
 
-
     async def _read_chunked_response(self, response, raise_error=True):
         result_set = {}
         async for line in self._iter_lines(response):
@@ -308,6 +307,79 @@ class AioInfluxDBClient(object):
             return results[0]
         else:
             return results
+
+    async def write_point(self,
+                          points,
+                          time_precision=None,
+                          database=None,
+                          retention_policy=None,
+                          tags=None,
+                          batch_size=None,
+                          protocol='json'
+                          ):
+        """
+        
+        :param points: 
+        :param time_precision: 
+        :param database: 
+        :param retention_policy: 
+        :param tags: 
+        :param batch_size: 
+        :param protocol: 
+        :return: 
+        """
+        if batch_size and batch_size > 0:
+            for batch in self._batches(points, batch_size):
+                await self._write_points(points=batch,
+                                         time_precision=time_precision,
+                                         database=database,
+                                         retention_policy=retention_policy,
+                                         tags=tags, protocol=protocol)
+
+    def _batches(self, iterable, size):
+        for i in range(0, len(iterable), size):
+            yield iterable[i:i + size]
+
+    async def _write_points(self,
+                            points,
+                            time_precision,
+                            database,
+                            retention_policy,
+                            tags,
+                            protocol='json'):
+        if time_precision not in ['n', 'u', 'ms', 's', 'm', 'h', None]:
+            raise ValueError(
+                "Invalid time precision is given. "
+                "(use 'n', 'u', 'ms', 's', 'm' or 'h')")
+
+        if protocol == 'json':
+            data = {
+                'points': points
+            }
+
+            if tags is not None:
+                data['tags'] = tags
+        else:
+            data = points
+
+        params = {
+            'db': database or self._database
+        }
+
+        if time_precision is not None:
+            params['precision'] = time_precision
+
+        if retention_policy is not None:
+            params['rp'] = retention_policy
+        # TODO UDP Support
+        await self.write(
+            data=data,
+            params=params,
+            expected_response_code=204,
+            protocol=protocol
+        )
+
+        return True
 
 
 def parse_dsn(dsn):
