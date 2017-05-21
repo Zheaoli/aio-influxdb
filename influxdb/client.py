@@ -185,6 +185,118 @@ class AioInfluxDBClient(object):
         else:
             raise Exception
 
+    async def write(self, data, params=None, expected_response_code=204, protocol='json'):
+        """
+
+        :param data: 
+        :param params: 
+        :param expected_response_code: 
+        :param protocol: 
+        :return: 
+        """
+        headers = self._headers
+        headers['content-type'] = 'application/octet-stream'
+        if params:
+            precision = params.get('precision')
+        else:
+            precision = None
+        if protocol == 'json':
+            data = make_lines(data, precision).encode('utf-8')
+        elif protocol == 'line':
+            data = ('\n'.join(data) + '\n').encode('utf-8')
+        await self.request(
+            url="write",
+            method='POST',
+            params=params,
+            data=data,
+            expected_response_code=expected_response_code,
+            headers=headers
+        )
+        return True
+
+    async def _read_chunked_response(self, response, raise_error=True):
+        result_set = {}
+        async for line in self._iter_lines(response):
+            if isinstance(line, bytes):
+                line = line.decode("utf-8")
+            data = json.loads(line)
+            for result in data.get("results", []):
+                for _key in result:
+                    if isinstance(result[_key], list):
+                        result_set.setdefault(_key, []).extend(result[_key])
+        return ResultSet(result_set, raise_errors=raise_error)
+
+    async def _iter_lines(self, response, chunk_size=512, decode_unicode=None, delimiter=None):
+        pending = None
+        async for chunk in response.content.iter_chunked(chunk_size):
+            if pending is not None:
+                chunk = pending + chunk
+            if delimiter:
+                lines = chunk.split(delimiter)
+            else:
+                lines = chunk.splitlines()
+            if lines and lines[-1] and chunk and lines[-1][-1] == chunk[-1]:
+                pending = lines.pop()
+            else:
+                pending = None
+            for line in lines:
+                yield line
+
+        if pending is not None:
+            yield pending
+
+    async def query(self,
+                    query,
+                    params=None,
+                    epoch=None,
+                    expected_response_code=200,
+                    database=None,
+                    raise_errors=True,
+                    chunked=False,
+                    chunk_size=0):
+        """
+
+        :param query: 
+        :param params: 
+        :param epoch: 
+        :param expected_response_code: 
+        :param database: 
+        :param raise_errors: 
+        :param chunked: 
+        :param chunk_size: 
+        :return: 
+        """
+        if params is None:
+            params = {}
+
+        params['q'] = query
+        params['db'] = database or self._database
+        if epoch is not None:
+            params['epoch'] = epoch
+        if chunked:
+            params['chunked'] = 'true'
+            if chunk_size > 0:
+                params['chunk_size'] = chunk_size
+        response = self.request(
+            url='query',
+            method='GET',
+            params=params,
+            data=None,
+            expected_response_code=expected_response_code
+        )
+        if chunked:
+            return self._read_chunked_response(response)
+        data = await response.json()
+        results = [
+            ResultSet(result, raise_errors=raise_errors)
+            for result
+            in data.get("results", [])
+        ]
+        if len(results) == 1:
+            return results[0]
+        else:
+            return results
+
 
 def parse_dsn(dsn):
     conn_params = urlparse(dsn)
