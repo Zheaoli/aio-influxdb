@@ -1,9 +1,8 @@
-import requests_mock
-from influxdb.client import AioInfluxDBClient
-import asyncio
 import unittest
 import warnings
 from unittest import mock
+
+from influxdb.client import AioInfluxDBClient
 
 
 class TestAioInfluxDBClient(unittest.TestCase):

@@ -12,10 +12,8 @@ from urllib.parse import urlparse
 
 import aiohttp
 
-
 from influxdb.httptool import ClientSession
 from influxdb.line_protocol import *
-from influxdb.httptool import ClientSession
 from influxdb.resultset import ResultSet
 
 
