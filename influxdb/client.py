@@ -12,7 +12,8 @@ from urllib.parse import urlparse
 
 import aiohttp
 
-from .httptool import ClientSession
+from influxdb.httptool import ClientSession
+from influxdb.resultset import ResultSet
 
 
 class AioInfluxDBClient(object):
@@ -85,6 +86,10 @@ class AioInfluxDBClient(object):
 
     def _get_port(self):
         return self.__port
+
+    @property
+    def session(self):
+        return self._session
 
     @classmethod
     def from_DSN(cls, dsn, **kwargs):
@@ -163,8 +168,8 @@ class AioInfluxDBClient(object):
         _try = 0
         while retry:
             try:
-                _response = self._session.request(method=method, url=url, params=params, data=data, headers=headers,
-                                                  auth=self._base_auth)
+                _response = request_client.request(method=method, url=url, params=params, data=data, headers=headers,
+                                                   auth=self._base_auth)
                 break
             except aiohttp.client_exceptions.ClientConnectionError as e:
                 _try += 1
