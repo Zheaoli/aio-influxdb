@@ -11,5 +11,6 @@ import aiohttp
 
 
 class ClientSession(aiohttp.ClientSession):
-    def request(self, method, url, **kwargs):
-        return self._request(method=method, url=url, **kwargs)
+    async def request(self, method, url, **kwargs):
+        _rep = await self._request(method=method, url=url, **kwargs)
+        return _rep

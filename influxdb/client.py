@@ -180,7 +180,7 @@ class AioInfluxDBClient(object):
         _try = 0
         while retry:
             try:
-                _response = request_client.request(method=method, url=url, params=params, data=data, headers=headers,
+                _response = await request_client.request(method=method, url=url, params=params, data=data, headers=headers,
                                                    auth=self._base_auth)
                 break
             except aiohttp.client_exceptions.ClientConnectionError as e:

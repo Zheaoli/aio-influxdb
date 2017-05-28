@@ -13,16 +13,14 @@ class TestAioInfluxDBClient(unittest.TestCase):
 
     def test_write(self):
         async def testwrite():
-            with mock.patch("aiohttp.client.ClientSession._request") as fake:
-                await self.cli.write({"database": "mydb",
-                                      "retentionPolicy": "mypolicy",
-                                      "points": [{"measurement": "cpu_load_short",
-                                                  "tags": {"host": "server01",
-                                                           "region": "us-west"},
-                                                  "time": "2009-11-10T23:00:00Z",
-                                                  "fields": {"value": 0.64}}]}
-                                     )
-                print(fake)
+            await self.cli.write({"database": "mydb",
+                                  "retentionPolicy": "mypolicy",
+                                  "points": [{"measurement": "cpu_load_short",
+                                              "tags": {"host": "server01",
+                                                       "region": "us-west"},
+                                              "time": "2009-11-10T23:00:00Z",
+                                              "fields": {"value": 0.64}}]}
+                                 )
 
         loop = asyncio.new_event_loop()
         loop.run_until_complete(testwrite())
